@@ -9,7 +9,7 @@ import random
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
-FOURSQUARE_API_KEY = 'fsq3JL8BjihA1daq7Vhi9lcGLwIfg3vYA/bMtKR5kKzVOdk=' 
+FOURSQUARE_API_KEY = 
 @app.route('/submit', methods=['POST'])
 def submit():
     data = request.json  # Expecting JSON data
