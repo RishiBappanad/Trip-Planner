@@ -5,9 +5,9 @@ import itenerary as itenerary
 from place import Place
 import urllib.parse
 
-FOURSQUARE_API_KEY = 'fsq3JL8BjihA1daq7Vhi9lcGLwIfg3vYA/bMtKR5kKzVOdk='  # Replace with your actual API key
-client_secret = 'CTL01ZJ1F5AGJFMFZYOQ0WD1TW1022AG3AXY5Z0KSCVIIUW5'
-client_id = 'EHGGLSTG2ARWVNOG1HHPJFYUTVUSKR31L0YPGQSMBK5YQA5Y'
+FOURSQUARE_API_KEY = 
+client_secret = 
+client_id = 
 
 
 class ScrollableFrame(Frame):
