@@ -1,5 +1,9 @@
 import math
 import random
+import googlemaps
+from functools import  lru_cache
+
+ROUTES_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY'
 
 
 class Itinerary:
@@ -13,69 +17,104 @@ class Itinerary:
         self.final = []
         self.restarts = 0
         self.path = []
+        self.gmaps = googlemaps.Client(key=ROUTES_API_KEY)
+        self.mode = "transit"
+        self.cache = {}
+        self.distance_matrix = {}
 
     def add_place(self, place):
         """Add a place to the itinerary."""
         self.places.append(place)
 
     def distance_between(self, place1, place2):
-        """Calculate the Euclidean distance between two places."""
-        x1, y1 = place1.location
-        x2, y2 = place2.location
-        return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        """Calculate the travel duration between two places using Google Maps API, with caching."""
+        # Create a tuple key for the cache
+        key = (place1.location, place2.location)
+        # Check if the distance is already cached
+        if key in self.cache:
+            return self.cache[key]
+
+        # Otherwise, calculate the distance
+
+
+        # Call the Google Maps API
+        return self.distance_matrix[place1.location][place2.location]
+
 
     def random_path(self, places):
         """Generate a random path (random TSP initialization)."""
-        path = places[:]
-        random.shuffle(path)
-        return path
+        places = places[:]
+        random.shuffle(places)
+        return places
 
-    def cost_of(self, path):
+    def cost_of(self, places):
         """Calculate the total distance of a path."""
         total_distance = 0.0
-        for i in range(len(path) - 1):
-            total_distance += self.distance_between(path[i], path[i + 1])
+        for i in range(len(places) - 1):
+            total_distance += self.distance_between(places[i], places[i + 1])
         # Add the distance back to the starting point to complete the tour
-        total_distance += self.distance_between(path[-1], path[0])
+        total_distance += self.distance_between(places[-1], places[0])
         return total_distance
 
+
+    def create_distance_matrix(self):
+        destinations = []
+        for place in self.places:
+            destinations.append(place.location)
+        matrix = self.gmaps.distance_matrix(destinations, destinations, mode=self.mode)
+        i = 0
+        for row in matrix['rows']:
+            j = 0
+            distance_matrix = {}
+            for element in row['elements']:
+                if element['status'] == 'OK':
+                    duration_value = element['duration']['value']
+                else:
+                    duration_value = math.inf
+                distance_matrix[destinations[j]] = duration_value
+                j += 1
+            self.distance_matrix[destinations[i]] = distance_matrix
+            i += 1
+
     def execute_step(self):
-        """Perform a local search to improve the path."""
-        if improve(self.path, self) > 0.1:
+        """Perform a local search to improve the places."""
+        if improve(self.places, self) > 0.1:
             return False
-        if self.cost_of(self.path) < self.optimal:
-            self.optimal = self.cost_of(self.path)
-            self.final = self.path[:]
+        if self.cost_of(self.places) < self.optimal:
+            self.optimal = self.cost_of(self.places)
+            self.final = self.places
         while self.restarts < 10:
             self.restarts += 1
-            self.path = self.random_path(self.places)
+            self.places = self.random_path(self.places)
             return False
         return True
 
-def improve(path, solver):
+
+def improve(places, solver):
     improvement = 0.0
-    for i in range(len(path) - 1):
-        for j in range(i + 1, len(path)):
+    for i in range(len(places) - 1):
+        for j in range(i + 1, len(places)):
             current_distance = (
-                solver.distance_between(path[i], path[i + 1]) +
-                solver.distance_between(path[j], path[(j + 1) % len(path)])
+                    solver.distance_between(places[i], places[i + 1]) +
+                    solver.distance_between(places[j], places[(j + 1) % len(places)])
             )
             new_distance = (
-                solver.distance_between(path[i], path[j]) +
-                solver.distance_between(path[i + 1], path[(j + 1) % len(path)])
+                    solver.distance_between(places[i], places[j]) +
+                    solver.distance_between(places[i + 1], places[(j + 1) % len(places)])
             )
             local_distance = current_distance - new_distance
             if local_distance > 0:
-                path = swap(path, i, j)
+                places = swap(places, i, j)
                 improvement += local_distance
 
     return improvement
 
-def swap(path, i, j):
+
+def swap(places, i, j):
     if i > j:
-        return path
-    temp = list(path[i + 1:j + 1])
+        return places
+    temp = list(places[i + 1:j + 1])
     temp.reverse()
-    new_path = path[:i + 1] + temp + path[j + 1:]
-    path[:] = new_path
-    return path
+    new_path = places[:i + 1] + temp + places[j + 1:]
+    places[:] = new_path
+    return places

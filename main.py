@@ -1,6 +1,34 @@
+import requests
 import tkinter as tk
-from itenerary import Itinerary
+from tkinter import *
+import itenerary as itenerary
 from place import Place
+import urllib.parse
+
+FOURSQUARE_API_KEY = 'fsq3JL8BjihA1daq7Vhi9lcGLwIfg3vYA/bMtKR5kKzVOdk='  # Replace with your actual API key
+client_secret = 'CTL01ZJ1F5AGJFMFZYOQ0WD1TW1022AG3AXY5Z0KSCVIIUW5'
+client_id = 'EHGGLSTG2ARWVNOG1HHPJFYUTVUSKR31L0YPGQSMBK5YQA5Y'
+
+
+class ScrollableFrame(Frame):
+    def __init__(self, container, *args, **kwargs):
+        super().__init__(container, *args, **kwargs)
+        canvas = Canvas(self)
+        scrollbar = Scrollbar(self, orient="vertical", command=canvas.yview)
+        self.scrollable_frame = Frame(canvas)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
 
 class TripPlannerUI(tk.Tk):
@@ -8,75 +36,108 @@ class TripPlannerUI(tk.Tk):
         super().__init__()
 
         self.title("Trip Planner")
-        self.geometry("400x700")
+        self.geometry("400x1000")
 
-        # Instance of the Itinerary class
-        self.itinerary = Itinerary()
+        # Scrollable Frame
+        container = ScrollableFrame(self)
+        container.pack(fill="both", expand=True)
 
-        # Location entry
-        tk.Label(self, text="Enter Location:").pack(pady=5)
-        self.location_entry = tk.Entry(self)
+        self.itinerary = itenerary.Itinerary()
+
+        tk.Label(container.scrollable_frame, text="Enter Location:").pack(pady=5)
+        self.location_entry = tk.Entry(container.scrollable_frame)
         self.location_entry.pack(pady=5)
 
-        # Car or no car option
-        tk.Label(self, text="Transportation:").pack(pady=5)
+        # Add a Listbox for suggestions
+        self.suggestions_listbox = tk.Listbox(self, height=5)
+        self.suggestions_listbox.place_forget()
+        self.suggestions_listbox.bind("<ButtonRelease-1>", self.select_suggestion)
+
+        # Bind location entry change event to update suggestions
+        self.location_entry.bind("<KeyRelease>", self.on_location_entry_change)
+
+        tk.Label(container.scrollable_frame, text="Transportation:").pack(pady=5)
         self.car_var = tk.BooleanVar()
-        self.car_check = tk.Checkbutton(self, text="Rent a Car", variable=self.car_var)
+        self.car_check = tk.Checkbutton(container.scrollable_frame, text="Rent a Car", variable=self.car_var)
         self.car_check.pack(pady=5)
 
-        # Hotel budget per night
-        tk.Label(self, text="Hotel Budget per Night:").pack(pady=5)
-        self.budget_slider = tk.Scale(self, from_=50, to_=1000, orient=tk.HORIZONTAL)
+        tk.Label(container.scrollable_frame, text="Hotel Budget per Night:").pack(pady=5)
+        self.budget_slider = tk.Scale(container.scrollable_frame, from_=50, to_=1000, orient=tk.HORIZONTAL)
         self.budget_slider.pack(pady=5)
 
-        # Stay duration
-        tk.Label(self, text="Stay Duration (days):").pack(pady=5)
-        self.duration_slider = tk.Scale(self, from_=1, to_=30, orient=tk.HORIZONTAL)
+        tk.Label(container.scrollable_frame, text="Stay Duration (days):").pack(pady=5)
+        self.duration_slider = tk.Scale(container.scrollable_frame, from_=1, to_=30, orient=tk.HORIZONTAL)
         self.duration_slider.pack(pady=5)
 
-        # Dining preferences
-        tk.Label(self, text="Dining Preferences:").pack(pady=5)
-        self.canvas = tk.Canvas(self, width=300, height=50)
+        tk.Label(container.scrollable_frame, text="Dining Preferences:").pack(pady=5)
+        self.canvas = tk.Canvas(container.scrollable_frame, width=300, height=50)
         self.canvas.pack(pady=5)
 
-        # Initial positions
         self.pos1 = 100
         self.pos2 = 200
-
-        # Draw the slider
         self.draw_slider()
 
         self.canvas.bind("<B1-Motion>", self.move_handle)
         self.canvas.bind("<Button-1>", self.move_handle)
 
-        # Tours preferences
-        tk.Label(self, text="Tours:").pack(pady=5)
-        self.tours_options = tk.Listbox(self, selectmode=tk.MULTIPLE)
+        tk.Label(container.scrollable_frame, text="Tours:").pack(pady=5)
+        self.tours_options = tk.Listbox(container.scrollable_frame, selectmode=tk.MULTIPLE)
         tours = ["City Tour", "Museum Tour", "Nature Tour", "Historical Tour", "Physical Activity"]
         for tour in tours:
             self.tours_options.insert(tk.END, tour)
         self.tours_options.pack(pady=5)
 
-        # Submit button
-        self.submit_button = tk.Button(self, text="Submit", command=self.submit)
+        self.submit_button = tk.Button(container.scrollable_frame, text="Submit", command=self.submit)
         self.submit_button.pack(pady=20)
+
+    def on_location_entry_change(self, event):
+        query = self.location_entry.get()
+        if len(query) > 2:
+            suggestions = self.get_autocomplete_suggestions(query)
+            self.update_suggestions_list(suggestions)
+
+    def get_autocomplete_suggestions(self, query):
+        url = "https://api.foursquare.com/v3/autocomplete"
+        headers = {
+            "accept": "application/json",
+            "Authorization": FOURSQUARE_API_KEY,
+        }
+        params = {
+            "query": query,
+            "limit": 10,
+            "types": "geo"
+        }
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code == 200:
+            return response.json().get('results', [])
+        else:
+            print(f"Error fetching suggestions: {response.status_code}")
+            return []
+
+    def update_suggestions_list(self, suggestions):
+        self.suggestions_listbox.delete(0, tk.END)
+        for suggestion in suggestions:
+            display_text = suggestion['text']['primary']
+            self.suggestions_listbox.insert(tk.END, display_text)
+
+    def select_suggestion(self, event):
+        selected_index = self.suggestions_listbox.curselection()
+        if selected_index:
+            selected_text = self.suggestions_listbox.get(selected_index)
+            self.location_entry.delete(0, tk.END)
+            self.location_entry.insert(0, selected_text)
+            self.suggestions_listbox.delete(0, tk.END)
 
     def draw_slider(self):
         self.canvas.delete("all")
 
-        # Draw the base line
         self.canvas.create_line(50, 25, 250, 25, fill="gray", width=2)
-
-        # Draw the segments
         self.canvas.create_line(50, 25, self.pos1, 25, fill="red", width=6)
         self.canvas.create_line(self.pos1, 25, self.pos2, 25, fill="green", width=6)
         self.canvas.create_line(self.pos2, 25, 250, 25, fill="blue", width=6)
-
-        # Draw the handles
         self.canvas.create_oval(self.pos1 - 5, 20, self.pos1 + 5, 30, fill="black")
         self.canvas.create_oval(self.pos2 - 5, 20, self.pos2 + 5, 30, fill="black")
 
-        # Display percentages
         fast_food_percent = int(((self.pos1 - 50) / 200) * 100)
         local_food_percent = int(((self.pos2 - self.pos1) / 200) * 100)
         upscale_dining_percent = 100 - fast_food_percent - local_food_percent
@@ -96,6 +157,7 @@ class TripPlannerUI(tk.Tk):
     def submit(self):
         location = self.location_entry.get()
         rent_car = self.car_var.get()
+        self.itinerary.mode = "driving" if rent_car else "transit"
         budget = self.budget_slider.get()
         duration = self.duration_slider.get()
 
@@ -113,14 +175,78 @@ class TripPlannerUI(tk.Tk):
             f"Dining Preferences: Fast Food {fast_food_percent}%, Local Food {local_food_percent}%, Upscale Dining {upscale_dining_percent}%")
         print(f"Selected Tours: {selected_tours}")
 
-        # Example: Add a new place to the itinerary
-        new_place = Place(location=(0, 0), type="Hotel")  # Replace with real data from Foursquare API
-        self.itinerary.add_place(new_place)
-        print(f"Added new place: {new_place.location} of type {new_place.type}")
+        '''
+                try:
+                    return_places = []
+                    for tour_type in selected_tours:
+                        places = self.search_places(location, query=tour_type)
+                        for i in range(2):
+                            return_places.append(places[i])
+                    for place in return_places:
+                        try:
+                            print(f"{place['name']} at {place['location']['address']}")
+                        except KeyError:
+                            try:
+                                print(f"{place['name']} at {place['address']}")
+                            except:
+                                print(f"{place['name']}")
+                        except:
+                            print(f"{place['name']}")
 
-        # Run itinerary optimization
-        self.itinerary.execute_step()
-        print(f"Optimized Path: {[place.location for place in self.itinerary.final]}")
+                except:
+                    pass
+                '''
+        # Make the API call
+        local_food = self.search_places(location, query="authentic food")
+        fast_food = self.search_places(location, query="fast food")
+        high_dining = self.search_places(location, query="high dining")
+        city_tours = self.search_places(location, query="{} tour".format(location))
+        museum = self.search_places(location, query="museum")
+        nature = self.search_places(location, query="wildlife")
+        history = self.search_places(location, query="historical tour")
+        hotels = self.search_places(location, query="hotel")
+        for place in hotels:
+            try:
+                print(f"{place['name']} at {place['location']['address']}")
+                place = Place(place['name'], place['location']['address'], type="hotel")
+                self.itinerary.add_place(place)
+                print('added')
+                '''
+
+            except KeyError:
+                try:
+                    print(f"{place['name']} at {place['address']}")
+                except:
+                    print(f"{place['name']} at {place['location']}")
+                     '''
+            except:
+                print(f"{place['name']} at {place['location']}")
+
+        print(self.itinerary.places)
+
+        # Example: Add a new place to the itinerary
+        self.itinerary.create_distance_matrix()
+        print("created distance matrix")
+        for element in self.itinerary.distance_matrix:
+            print(self.itinerary.distance_matrix[element])
+        done = False
+        while not done:
+            done = self.itinerary.execute_step()
+        print(f"Optimized Path: {[place.name for place in self.itinerary.final]}")
+
+    def search_places(self, location, query):
+        location = urllib.parse.quote(location)
+        url = f"https://api.foursquare.com/v3/places/search?query={query}&near={location}"
+        headers = {
+            "accept": "application/json",
+            "Authorization": FOURSQUARE_API_KEY,
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json().get('results', [])
+        else:
+            print(f"Error fetching places: {response.status_code}")
+            return []
 
 
 if __name__ == "__main__":
