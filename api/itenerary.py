@@ -3,7 +3,7 @@ import random
 import googlemaps
 from functools import  lru_cache
 
-ROUTES_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY'
+ROUTES_API_KEY = 
 
 
 class Itinerary:
