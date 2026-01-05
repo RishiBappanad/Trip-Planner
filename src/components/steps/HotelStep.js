@@ -1,25 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import '../steps/steps.css';
 
 const GOOGLE_MAPS_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY';
 
-const HotelStep = ({ location, locationCoords, radius, budget, selectedHotel, onBudgetChange, onHotelSelect, onNext, onBack }) => {
+const HotelStep = ({ location, locationCoords, radius, budget, selectedHotel, checkInDate, checkOutDate, onBudgetChange, onHotelSelect, onCheckInChange, onCheckOutChange, onNext, onBack }) => {
   const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: GOOGLE_MAPS_API_KEY });
   const [hotels, setHotels] = useState([]);
   const [loadingHotels, setLoadingHotels] = useState(false);
   const [error, setError] = useState(null);
 
+  // Set default dates if not provided
+  const defaultCheckIn = checkInDate || new Date();
+  const defaultCheckOut = checkOutDate || new Date(Date.now() + 24 * 60 * 60 * 1000); // Tomorrow
+
   useEffect(() => {
-    if (location && locationCoords && budget) {
+    if (location && locationCoords && budget && checkInDate && checkOutDate) {
       fetchHotels();
     }
-  }, [location, locationCoords, radius, budget]);
+  }, [location, locationCoords, radius, budget, checkInDate, checkOutDate]);
 
   const fetchHotels = async () => {
     setLoadingHotels(true);
     setError(null);
     try {
+      // Format dates as YYYY-MM-DD for API
+      const formatDate = (date) => {
+        if (!date) return null;
+        const d = new Date(date);
+        return d.toISOString().split('T')[0];
+      };
+
       const response = await fetch('http://127.0.0.1:5000/api/search-hotels', {
         method: 'POST',
         headers: {
@@ -30,6 +43,8 @@ const HotelStep = ({ location, locationCoords, radius, budget, selectedHotel, on
           location_coords: locationCoords,
           radius: radius,
           max_price: budget,
+          check_in_date: formatDate(checkInDate || defaultCheckIn),
+          check_out_date: formatDate(checkOutDate || defaultCheckOut),
         }),
       });
 
@@ -88,6 +103,43 @@ const HotelStep = ({ location, locationCoords, radius, budget, selectedHotel, on
           <span>$50</span>
           <span>$500</span>
           <span>$1000</span>
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label>Travel Dates</label>
+        <div className="date-picker-container">
+          <div className="date-picker-group">
+            <label htmlFor="checkin" className="date-label">Check-in Date</label>
+            <DatePicker
+              id="checkin"
+              selected={checkInDate || defaultCheckIn}
+              onChange={(date) => onCheckInChange(date)}
+              minDate={new Date()}
+              maxDate={checkOutDate || null}
+              selectsStart
+              startDate={checkInDate || defaultCheckIn}
+              endDate={checkOutDate || defaultCheckOut}
+              className="date-picker-input"
+              dateFormat="MM/dd/yyyy"
+              placeholderText="Select check-in date"
+            />
+          </div>
+          <div className="date-picker-group">
+            <label htmlFor="checkout" className="date-label">Check-out Date</label>
+            <DatePicker
+              id="checkout"
+              selected={checkOutDate || defaultCheckOut}
+              onChange={(date) => onCheckOutChange(date)}
+              minDate={checkInDate || defaultCheckIn}
+              selectsEnd
+              startDate={checkInDate || defaultCheckIn}
+              endDate={checkOutDate || defaultCheckOut}
+              className="date-picker-input"
+              dateFormat="MM/dd/yyyy"
+              placeholderText="Select check-out date"
+            />
+          </div>
         </div>
       </div>
 

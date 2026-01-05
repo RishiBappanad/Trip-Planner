@@ -14,6 +14,8 @@ const TripWizard = () => {
     locationCoords: null, // { lat, lng }
     radius: 5, // in miles
     selectedHotel: null,
+    checkInDate: new Date(),
+    checkOutDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
     rentCar: false,
     budget: 100,
     duration: 1,
@@ -124,8 +126,12 @@ const TripWizard = () => {
             radius={formData.radius}
             budget={formData.budget}
             selectedHotel={formData.selectedHotel}
+            checkInDate={formData.checkInDate}
+            checkOutDate={formData.checkOutDate}
             onBudgetChange={(budget) => updateFormData({ budget })}
             onHotelSelect={(hotel) => updateFormData({ selectedHotel: hotel })}
+            onCheckInChange={(date) => updateFormData({ checkInDate: date })}
+            onCheckOutChange={(date) => updateFormData({ checkOutDate: date })}
             onNext={nextStep}
             onBack={prevStep}
           />

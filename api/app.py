@@ -13,8 +13,8 @@ CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://12
 FOURSQUARE_API_KEY = 'SM242XPEPY4214Z5FLIJI1IL2ZMG02PA22ZOQ1SRDMQ0RWBC'
 
 # Amadeus configuration (use environment variables in a real deployment)
-AMADEUS_CLIENT_ID = os.getenv("AMADEUS_CLIENT_ID")
-AMADEUS_CLIENT_SECRET = os.getenv("AMADEUS_CLIENT_SECRET")
+AMADEUS_CLIENT_ID = "G6323WYjtTGJZT5gJvd7RwDI3jNk2A87"
+AMADEUS_CLIENT_SECRET = "Gfnk0HzXGikjTsLR"
 AMADEUS_BASE_URL = "https://test.api.amadeus.com"
 
 
@@ -220,8 +220,33 @@ def search_hotels():
         location_coords = data.get('location_coords')
         radius = data.get('radius', 5)  # in miles
         max_price = data.get('max_price', 200)
+        check_in_date = data.get('check_in_date')
+        check_out_date = data.get('check_out_date')
         
-        # Search for hotels
+        # Use Amadeus API if we have coordinates and dates
+        if location_coords and check_in_date and check_out_date:
+            try:
+                lat = location_coords.get('lat')
+                lng = location_coords.get('lng')
+                
+                # Step 1: Get hotels by geocode
+                hotels = get_hotels(lat, lng, radius)
+                
+                # Step 2: Get priced hotels
+                priced_hotel_list = priced_hotels(
+                    max_price=max_price,
+                    check_in_date=check_in_date,
+                    check_out_date=check_out_date,
+                    hotels=hotels
+                )
+                
+                return jsonify({'hotels': priced_hotel_list})
+            except Exception as amadeus_err:
+                print(f"Amadeus API error: {amadeus_err}")
+                # Fallback to Foursquare if Amadeus fails
+                pass
+        
+        # Fallback to Foursquare search
         hotels = search_places(
             location=location,
             query="hotel",
