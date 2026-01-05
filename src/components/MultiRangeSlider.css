@@ -1,0 +1,128 @@
+.multi-range-container {
+  width: 100%;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.slider-track {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: #e0e0e0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.slider-segment {
+  height: 100%;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  transition: opacity 0.1s ease;
+}
+
+.slider-segment:hover {
+  opacity: 0.8;
+}
+
+.segment-ff {
+  background: linear-gradient(135deg, #ff6b6b, #ff8787);
+  border-radius: 5px 0 0 5px;
+}
+
+.segment-local {
+  background: linear-gradient(135deg, #4c6ef5, #748ffc);
+}
+
+.segment-upscale {
+  background: linear-gradient(135deg, #ffd43b, #ffe066);
+  border-radius: 0 5px 5px 0;
+}
+
+.slider-handle {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+}
+
+.slider-handle:active {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.handle-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: all 0.1s ease;
+}
+
+.slider-handle:hover .handle-dot {
+  background: #f0f0f0;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+
+.slider-handle:active .handle-dot {
+  background: #e0e0e0;
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-around;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.label-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+  min-width: 120px;
+}
+
+.label-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.ff-color {
+  background: linear-gradient(135deg, #ff6b6b, #ff8787);
+}
+
+.local-color {
+  background: linear-gradient(135deg, #4c6ef5, #748ffc);
+}
+
+.upscale-color {
+  background: linear-gradient(135deg, #ffd43b, #ffe066);
+}
+
+.label-text {
+  white-space: nowrap;
+}
+

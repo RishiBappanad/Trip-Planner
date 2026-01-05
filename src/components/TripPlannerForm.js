@@ -1,7 +1,8 @@
 // TripPlannerForm.js
 import React, { useState } from 'react';
 import LocationInput from './LocationInput';
-import RangeSlider from './RangeSlider';
+import ToursList from './ToursList';
+import MultiRangeSlider from './MultiRangeSlider';
 import './TripPlannerForm.css';
 
 const TripPlannerForm = () => {
@@ -9,6 +10,7 @@ const TripPlannerForm = () => {
   const [carRental, setCarRental] = useState(false);
   const [budget, setBudget] = useState(50);
   const [duration, setDuration] = useState(1);
+  // diningPreference: { fastFood: number, local: number, upscale: number }
   const [diningPreference, setDiningPreference] = useState({ fastFood: 30, local: 40, upscale: 30 });
   const [selectedTours, setSelectedTours] = useState([]);
 
@@ -37,7 +39,7 @@ const TripPlannerForm = () => {
             min="50"
             max="1000"
             value={budget}
-            onChange={(e) => setBudget(e.target.value)}
+            onChange={(e) => setBudget(Number(e.target.value))}
           />
           ${budget}
         </label>
@@ -48,11 +50,22 @@ const TripPlannerForm = () => {
             min="1"
             max="30"
             value={duration}
-            onChange={(e) => setDuration(e.target.value)}
+            onChange={(e) => setDuration(Number(e.target.value))}
           />
           {duration} days
         </label>
-        <RangeSlider diningPreference={diningPreference} setDiningPreference={setDiningPreference} />
+        {/* Dining Preference Slider */}
+        <label>
+          Dining Preferences:
+          <MultiRangeSlider
+            onChange={(values) => setDiningPreference(values)}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9em' }}>
+            <span>Fast Food</span>
+            <span>Local Dining</span>
+            <span>High-End</span>
+          </div>
+        </label>
         <ToursList selectedTours={selectedTours} setSelectedTours={setSelectedTours} />
         <button type="submit">Submit</button>
       </form>

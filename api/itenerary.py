@@ -3,7 +3,7 @@ import random
 import googlemaps
 from functools import  lru_cache
 
-ROUTES_API_KEY = 
+ROUTES_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY'
 
 
 class Itinerary:
@@ -38,6 +38,8 @@ class Itinerary:
 
 
         # Call the Google Maps API
+        distance = self.distance_matrix[place1.location][place2.location]
+        self.cache[key] = distance
         return self.distance_matrix[place1.location][place2.location]
 
 
@@ -71,18 +73,25 @@ class Itinerary:
                     duration_value = element['duration']['value']
                 else:
                     duration_value = math.inf
+                
+                # Set distance to infinity if two places have the same type
+                if i != j and self.places[i].type == self.places[j].type:
+                    duration_value = math.inf
+                
                 distance_matrix[destinations[j]] = duration_value
                 j += 1
             self.distance_matrix[destinations[i]] = distance_matrix
             i += 1
 
+
     def execute_step(self):
         """Perform a local search to improve the places."""
         if improve(self.places, self) > 0.1:
             return False
+        # Accept final schedule if it improves the cost
         if self.cost_of(self.places) < self.optimal:
             self.optimal = self.cost_of(self.places)
-            self.final = self.places
+            self.final = list(self.places)
         while self.restarts < 10:
             self.restarts += 1
             self.places = self.random_path(self.places)
@@ -94,19 +103,20 @@ def improve(places, solver):
     improvement = 0.0
     for i in range(len(places) - 1):
         for j in range(i + 1, len(places)):
+            # Try swapping - distance matrix already enforces type constraints
+            candidate = swap(list(places), i, j)
             current_distance = (
-                    solver.distance_between(places[i], places[i + 1]) +
-                    solver.distance_between(places[j], places[(j + 1) % len(places)])
+                solver.distance_between(places[i], places[i + 1]) +
+                solver.distance_between(places[j], places[(j + 1) % len(places)])
             )
             new_distance = (
-                    solver.distance_between(places[i], places[j]) +
-                    solver.distance_between(places[i + 1], places[(j + 1) % len(places)])
+                solver.distance_between(candidate[i], candidate[j]) +
+                solver.distance_between(candidate[i + 1], candidate[(j + 1) % len(candidate)])
             )
             local_distance = current_distance - new_distance
             if local_distance > 0:
-                places = swap(places, i, j)
+                places[:] = candidate
                 improvement += local_distance
-
     return improvement
 
 

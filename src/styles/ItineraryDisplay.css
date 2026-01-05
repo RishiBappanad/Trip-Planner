@@ -1,0 +1,363 @@
+.itinerary-display {
+  padding: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  margin: 20px 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.itinerary-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.itinerary-header h2 {
+  margin: 0 0 10px 0;
+  font-size: 32px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.trip-summary {
+  margin: 0;
+  font-size: 16px;
+  color: #7f8c8d;
+  letter-spacing: 0.5px;
+}
+
+/* Map Container */
+.map-container {
+  margin-bottom: 30px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.map-container > div {
+  border-radius: 8px;
+}
+
+.info-window {
+  padding: 12px;
+  font-size: 14px;
+}
+
+.info-window h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.info-window p {
+  margin: 4px 0;
+  color: #555;
+  line-height: 1.5;
+}
+
+.info-window strong {
+  color: #2c3e50;
+}
+
+/* Itinerary Container */
+.itinerary-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.itinerary-container h3 {
+  margin: 0 0 15px 0;
+  font-size: 20px;
+  color: #2c3e50;
+  border-bottom: 3px solid #3498db;
+  padding-bottom: 10px;
+}
+
+/* Day Cards */
+.day-card {
+  margin-bottom: 15px;
+  border: 1px solid #ecf0f1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fafafa;
+  transition: all 0.3s ease;
+}
+
+.day-card:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  border-color: #3498db;
+}
+
+.day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.3s ease;
+}
+
+.day-header:hover {
+  background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+}
+
+.day-header h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.day-count {
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.3);
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-right: 10px;
+}
+
+.expand-icon {
+  font-size: 12px;
+  transition: transform 0.3s ease;
+}
+
+.day-card:hover .expand-icon {
+  transform: scale(1.2);
+}
+
+/* Day Places */
+.day-places {
+  padding: 10px;
+  background: white;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+    transform: translateY(0);
+  }
+}
+
+.place-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #3498db;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.place-item:hover {
+  background: #ecf0f1;
+  transform: translateX(5px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.place-item:last-child {
+  margin-bottom: 0;
+}
+
+.place-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: #3498db;
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 14px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.place-details {
+  flex: 1;
+}
+
+.place-details h5 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.place-type {
+  margin: 0;
+  font-size: 13px;
+  color: #7f8c8d;
+  text-transform: capitalize;
+  font-style: italic;
+}
+
+.place-address {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: #95a5a6;
+  line-height: 1.4;
+}
+
+.place-color-indicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  margin-left: 12px;
+  flex-shrink: 0;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.place-item:hover .place-color-indicator {
+  transform: scale(1.2);
+}
+
+/* Trip Details */
+.trip-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.detail-box {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 6px;
+  border-left: 4px solid #3498db;
+  transition: all 0.3s ease;
+}
+
+.detail-box:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.detail-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #7f8c8d;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-right: 10px;
+  min-width: 80px;
+}
+
+.detail-value {
+  font-size: 16px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .itinerary-display {
+    padding: 15px;
+    margin: 10px 0;
+  }
+
+  .itinerary-header h2 {
+    font-size: 24px;
+  }
+
+  .day-header {
+    flex-wrap: wrap;
+  }
+
+  .day-count {
+    order: 3;
+    flex-basis: 100%;
+    margin: 8px 0 0 0;
+  }
+
+  .place-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .place-number {
+    margin-right: 12px;
+    margin-bottom: 8px;
+  }
+
+  .place-color-indicator {
+    align-self: flex-end;
+    margin-left: 0;
+    margin-top: 8px;
+  }
+
+  .trip-details {
+    grid-template-columns: 1fr;
+  }
+
+  .map-container {
+    height: 350px;
+  }
+}
+
+@media (max-width: 480px) {
+  .itinerary-header h2 {
+    font-size: 20px;
+  }
+
+  .itinerary-header {
+    padding: 15px;
+  }
+
+  .itinerary-container {
+    padding: 15px;
+  }
+
+  .day-header {
+    padding: 12px;
+  }
+
+  .day-places {
+    padding: 8px;
+  }
+
+  .place-item {
+    padding: 10px;
+  }
+
+  .place-details h5 {
+    font-size: 14px;
+  }
+
+  .trip-details {
+    padding: 15px;
+    gap: 10px;
+  }
+
+  .detail-label {
+    font-size: 11px;
+  }
+
+  .detail-value {
+    font-size: 14px;
+  }
+}
