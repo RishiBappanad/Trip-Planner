@@ -6,7 +6,21 @@ import '../steps/steps.css';
 
 const GOOGLE_MAPS_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY';
 
-const HotelStep = ({ location, locationCoords, radius, budget, selectedHotel, checkInDate, checkOutDate, onBudgetChange, onHotelSelect, onCheckInChange, onCheckOutChange, onNext, onBack }) => {
+const HotelStep = ({
+  location,
+  locationCoords,
+  radius,
+  budget,
+  selectedHotel,
+  checkInDate,
+  checkOutDate,
+  onBudgetChange,
+  onHotelSelect,
+  onCheckInChange,
+  onCheckOutChange,
+  onNext,
+  onBack,
+}) => {
   const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: GOOGLE_MAPS_API_KEY });
   const [hotels, setHotels] = useState([]);
   const [loadingHotels, setLoadingHotels] = useState(false);

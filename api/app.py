@@ -3,6 +3,7 @@ from flask_cors import CORS  # Import CORS
 import os
 import requests
 import urllib.parse
+from datetime import datetime
 from itenerary import Itinerary
 from place import Place
 import random
@@ -102,11 +103,10 @@ def get_hotels(lat, lon, radius_miles):
             )
         except Exception as e:
             print(f"Error parsing Amadeus hotel item: {e}")
-
     return hotels
 
 
-def _chunk_hotels(hotels, batch_size=20):
+def _chunk_hotels(hotels, batch_size=5):
     """
     Helper to split a list of hotels into batches of valid size for the offers API.
     """
@@ -114,10 +114,10 @@ def _chunk_hotels(hotels, batch_size=20):
         yield hotels[i : i + batch_size]
 
 
-def priced_hotels(max_price, check_in_date, check_out_date, hotels, adults=2, currency="USD"):
+def priced_hotels(max_price, check_in_date, check_out_date, hotels, adults=1, currency="USD"):
     """
     Step 2: Given a price ceiling, dates, and a hotel list from get_hotels,
-    return a filtered list of hotels that have offers within the price range.
+    return a list of hotels that have at least one offer within the price range.
 
     Args:
         max_price (float): maximum total price (per stay) to include
@@ -128,8 +128,8 @@ def priced_hotels(max_price, check_in_date, check_out_date, hotels, adults=2, cu
         currency (str): currency code, e.g. 'USD'
 
     Returns:
-        list[dict]: same shape as `hotels` but only those within price range,
-                    each dict will also include a 'price' field (float).
+        list[dict]: one entry per hotel that has any matching offer,
+                    each dict includes a 'price' field from a qualifying offer.
     """
     if not hotels:
         return []
@@ -140,10 +140,11 @@ def priced_hotels(max_price, check_in_date, check_out_date, hotels, adults=2, cu
         "Accept": "application/json",
     }
 
-    hotel_by_id = {h.get("hotelId"): h for h in hotels if h.get("hotelId")}
-    best_prices = {}
+    result = []
+    seen_ids = set()
 
-    for batch in _chunk_hotels(hotels):
+    # Process hotels in batches of 5
+    for batch in _chunk_hotels(hotels, batch_size=5):
         hotel_ids = [h.get("hotelId") for h in batch if h.get("hotelId")]
         if not hotel_ids:
             continue
@@ -155,7 +156,6 @@ def priced_hotels(max_price, check_in_date, check_out_date, hotels, adults=2, cu
             "checkOutDate": check_out_date,
             "adults": adults,
             "currency": currency,
-            # priceRange is optional; we also enforce on our side
             "priceRange": f"0-{max_price}",
         }
 
@@ -171,40 +171,54 @@ def priced_hotels(max_price, check_in_date, check_out_date, hotels, adults=2, cu
                 hotel_info = item.get("hotel", {})
                 hotel_id = hotel_info.get("hotelId")
                 offers = item.get("offers", [])
-                if not hotel_id or not offers:
+                if not hotel_id or not offers or hotel_id in seen_ids:
                     continue
 
-                # Find the cheapest offer for this hotel
-                min_total = None
+                # Find any offer within the price range (take the first that matches)
+                qualifying_price = None
                 for offer in offers:
                     price_info = offer.get("price", {})
                     total_str = price_info.get("total")
+                    print(total_str)
                     try:
                         total_val = float(total_str)
                     except (TypeError, ValueError):
                         continue
-                    if min_total is None or total_val < min_total:
-                        min_total = total_val
-
-                if min_total is None or min_total > max_price:
+                    if total_val <= max_price:
+                        qualifying_price = total_val
+                        break
+                if qualifying_price is None:
                     continue
 
-                # Keep the best price found for this hotel
-                if (hotel_id not in best_prices) or (min_total < best_prices[hotel_id]):
-                    best_prices[hotel_id] = min_total
+                geo = hotel_info.get("geoCode", {})
+                address_obj = hotel_info.get("address", {})
+                address = ", ".join(
+                    filter(
+                        None,
+                        [
+                            address_obj.get("addressLine"),
+                            address_obj.get("cityName"),
+                            address_obj.get("postalCode"),
+                            address_obj.get("countryCode"),
+                        ],
+                    )
+                )
+
+                hotel_entry = {
+                    "hotelId": hotel_id,
+                    "name": hotel_info.get("name") or "Unknown",
+                    "lat": geo.get("latitude"),
+                    "lon": geo.get("longitude"),
+                    "address": address or "Unknown",
+                    "price": qualifying_price,
+                }
+
+                result.append(hotel_entry)
+                print(f"Added hotel: {hotel_entry}")
+                seen_ids.add(hotel_id)
             except Exception as e:
                 print(f"Error parsing Amadeus offer item: {e}")
-
-    # Build filtered list with price field
-    result = []
-    for hotel_id, price in best_prices.items():
-        base = hotel_by_id.get(hotel_id)
-        if not base:
-            continue
-        enriched = dict(base)
-        enriched["price"] = price
-        result.append(enriched)
-
+    print(result)
     return result
 
 
@@ -219,9 +233,26 @@ def search_hotels():
         location = data.get('location')
         location_coords = data.get('location_coords')
         radius = data.get('radius', 5)  # in miles
-        max_price = data.get('max_price', 200)
+        budget_per_night = data.get('max_price', 200)  # This is actually budget per night
         check_in_date = data.get('check_in_date')
         check_out_date = data.get('check_out_date')
+        
+        # Calculate number of nights and total max price
+        num_nights = 1  # Default to 1 night
+        if check_in_date and check_out_date:
+            try:
+                check_in = datetime.strptime(check_in_date, '%Y-%m-%d')
+                check_out = datetime.strptime(check_out_date, '%Y-%m-%d')
+                num_nights = (check_out - check_in).days
+                if num_nights < 1:
+                    num_nights = 1  # Ensure at least 1 night
+            except Exception as date_err:
+                print(f"Error calculating nights: {date_err}")
+                num_nights = 1
+        
+        # Max price is budget per night * number of nights
+        max_price = budget_per_night * num_nights
+        print(f"Budget per night: ${budget_per_night}, Nights: {num_nights}, Max total price: ${max_price}")
         
         # Use Amadeus API if we have coordinates and dates
         if location_coords and check_in_date and check_out_date:
@@ -232,7 +263,7 @@ def search_hotels():
                 # Step 1: Get hotels by geocode
                 hotels = get_hotels(lat, lng, radius)
                 
-                # Step 2: Get priced hotels
+                # Step 2: Get priced hotels (batches of 5)
                 priced_hotel_list = priced_hotels(
                     max_price=max_price,
                     check_in_date=check_in_date,
@@ -294,7 +325,15 @@ def submit():
         print(f"Received submit request: location={location}, tours={selected_tours}, duration={duration}")
         
         # Use hotel location as center if provided, otherwise use location_coords or location
-        search_center = hotel.get('lat') and hotel.get('lon') and f"{hotel['lat']},{hotel['lon']}" if hotel else (location_coords and f"{location_coords['lat']},{location_coords['lng']}" if location_coords else location)
+        if hotel and hotel.get('lat') and hotel.get('lon'):
+            search_center = f"{hotel['lat']},{hotel['lon']}"
+        elif location_coords and location_coords.get('lat') and location_coords.get('lng'):
+            search_center = f"{location_coords['lat']},{location_coords['lng']}"
+        else:
+            search_center = location or ""
+        
+        if not search_center:
+            return jsonify({'error': 'No valid search location provided'}), 400
         
         # Map tour types to better search queries for Nominatim
         tour_query_map = {
@@ -414,11 +453,13 @@ def submit():
 
 def search_places(location, query, max_price=None, radius=None, location_coords=None):
     """Search places using Foursquare Places API and return list of Place objects with address and coords."""
-    near = urllib.parse.quote(location)
-    q = urllib.parse.quote(query)
+    # Ensure location is a string
+    if location is None:
+        return []
+    location_str = str(location)
     
-    # Build URL with parameters
-    url = f"https://places-api.foursquare.com/places/search?query={query}&near={location}&limit=10"
+    # Build URL with parameters (Foursquare API handles URL encoding, so we can use the string directly)
+    url = f"https://places-api.foursquare.com/places/search?query={urllib.parse.quote(query)}&near={urllib.parse.quote(location_str)}&limit=10"
     
     # Add max_price if provided (for hotels)
     if max_price is not None:
