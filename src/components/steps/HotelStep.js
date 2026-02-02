@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { GoogleMap, Marker, InfoWindow, useLoadScript } from '@react-google-maps/api';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import '../steps/steps.css';
-
-const GOOGLE_MAPS_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY';
+import useGoogleMapsKey from '../useGoogleMapsKey';
+import { API_BASE } from '../../config';
 
 const HotelStep = ({
   location,
@@ -14,27 +14,53 @@ const HotelStep = ({
   selectedHotel,
   checkInDate,
   checkOutDate,
+  rentCar,
+  duration,
   onBudgetChange,
   onHotelSelect,
   onCheckInChange,
   onCheckOutChange,
+  onRentCarChange,
+  onDurationChange,
   onNext,
   onBack,
 }) => {
-  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: GOOGLE_MAPS_API_KEY });
+  const { apiKey, loading: keyLoading, error: keyError } = useGoogleMapsKey();
+  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: apiKey });
   const [hotels, setHotels] = useState([]);
   const [loadingHotels, setLoadingHotels] = useState(false);
   const [error, setError] = useState(null);
+  const [hotelName, setHotelName] = useState('');
+  const [selectedMarker, setSelectedMarker] = useState(null);
+  const mapRef = useRef();
 
   // Set default dates if not provided
   const defaultCheckIn = checkInDate || new Date();
   const defaultCheckOut = checkOutDate || new Date(Date.now() + 24 * 60 * 60 * 1000); // Tomorrow
 
+  // Calculate duration when dates change
   useEffect(() => {
-    if (location && locationCoords && budget && checkInDate && checkOutDate) {
-      fetchHotels();
+    if (checkInDate && checkOutDate) {
+      const diffTime = Math.abs(checkOutDate - checkInDate);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays !== duration) {
+        onDurationChange(diffDays);
+      }
     }
-  }, [location, locationCoords, radius, budget, checkInDate, checkOutDate]);
+  }, [checkInDate, checkOutDate, duration, onDurationChange]);
+
+  // Fit map bounds to all hotels
+  useEffect(() => {
+    if (hotels.length > 0 && mapRef.current && window.google) {
+      const bounds = new window.google.maps.LatLngBounds();
+      hotels.forEach(hotel => {
+        if (hotel.lat && hotel.lon) {
+          bounds.extend({ lat: hotel.lat, lng: hotel.lon });
+        }
+      });
+      mapRef.current.fitBounds(bounds);
+    }
+  }, [hotels]);
 
   const fetchHotels = async () => {
     setLoadingHotels(true);
@@ -47,7 +73,7 @@ const HotelStep = ({
         return d.toISOString().split('T')[0];
       };
 
-      const response = await fetch('http://127.0.0.1:5000/api/search-hotels', {
+      const response = await fetch(`${API_BASE}/api/search-hotels`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,6 +83,7 @@ const HotelStep = ({
           location_coords: locationCoords,
           radius: radius,
           max_price: budget,
+          hotel_name: hotelName,
           check_in_date: formatDate(checkInDate || defaultCheckIn),
           check_out_date: formatDate(checkOutDate || defaultCheckOut),
         }),
@@ -89,16 +116,31 @@ const HotelStep = ({
     mapTypeId: 'roadmap'
   };
 
+  if (keyLoading) return <div>Loading API key...</div>;
+  if (keyError) return <div>Error loading API key</div>;
+
   if (loadError) return <div>Error loading maps</div>;
   if (!isLoaded) return <div>Loading map...</div>;
 
   return (
     <div className="step-container">
-      <h2>Step 3: Choose Your Hotel</h2>
+      <h2>Step 3: Choose Your Hotel & Transportation</h2>
       <p className="step-description">
-        Set your hotel budget per night and select a hotel from the available options.
+        Set your hotel preferences, transportation, and dates.
       </p>
-      
+
+      <div className="form-group">
+        <label htmlFor="hotelName">Hotel Name (optional)</label>
+        <input
+          id="hotelName"
+          type="text"
+          value={hotelName}
+          onChange={(e) => setHotelName(e.target.value)}
+          placeholder="Enter hotel address or leave blank for budget search"
+          className="form-input"
+        />
+      </div>
+
       <div className="form-group">
         <label htmlFor="budget">
           Hotel Budget per Night: ${budget}
@@ -118,6 +160,17 @@ const HotelStep = ({
           <span>$500</span>
           <span>$1000</span>
         </div>
+      </div>
+
+      <div className="form-group">
+        <button
+          type="button"
+          onClick={fetchHotels}
+          disabled={!location || !locationCoords || loadingHotels}
+          className="btn btn-secondary"
+        >
+          {loadingHotels ? 'Searching...' : 'Search Hotels'}
+        </button>
       </div>
 
       <div className="form-group">
@@ -157,6 +210,23 @@ const HotelStep = ({
         </div>
       </div>
 
+      <div className="form-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={rentCar}
+            onChange={(e) => onRentCarChange(e.target.checked)}
+            className="form-checkbox"
+          />
+          <span>Rent a Car</span>
+        </label>
+        <p className="help-text">
+          {rentCar
+            ? 'You\'ll be using a car for transportation. Routes will be optimized for driving.'
+            : 'You\'ll be using public transit. Routes will be optimized for transit.'}
+        </p>
+      </div>
+
       {loadingHotels && (
         <div className="loading-message">Loading hotels...</div>
       )}
@@ -176,6 +246,8 @@ const HotelStep = ({
               key={idx}
               className={`hotel-card ${selectedHotel?.name === hotel.name ? 'selected' : ''}`}
               onClick={() => onHotelSelect(hotel)}
+              onMouseEnter={() => setSelectedMarker(idx)}
+              onMouseLeave={() => setSelectedMarker(null)}
             >
               <h4>{hotel.name}</h4>
               <p className="hotel-address">{hotel.address}</p>
@@ -192,6 +264,7 @@ const HotelStep = ({
             center={locationCoords}
             zoom={mapOptions.zoom}
             options={mapOptions}
+            onLoad={(map) => { mapRef.current = map; }}
           >
             {hotels.map((hotel, idx) => (
               hotel.lat && hotel.lon && (
@@ -207,7 +280,17 @@ const HotelStep = ({
                     strokeColor: '#fff',
                     strokeWeight: 1
                   }}
-                />
+                >
+                  {selectedMarker === idx && (
+                    <InfoWindow onCloseClick={() => setSelectedMarker(null)}>
+                      <div>
+                        <h3>{hotel.name}</h3>
+                        <p>{hotel.address}</p>
+                        {hotel.price && <p>${hotel.price}/night</p>}
+                      </div>
+                    </InfoWindow>
+                  )}
+                </Marker>
               )
             ))}
           </GoogleMap>
@@ -230,7 +313,7 @@ const HotelStep = ({
           disabled={!selectedHotel}
           className="btn btn-primary"
         >
-          Next: Transportation
+          Next: Preferences
         </button>
       </div>
     </div>

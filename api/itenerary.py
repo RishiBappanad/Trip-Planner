@@ -2,8 +2,8 @@ import math
 import random
 import googlemaps
 from functools import  lru_cache
-
-ROUTES_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY'
+from place import PlaceType
+from config import ROUTES_API_KEY
 
 
 class Itinerary:
@@ -28,18 +28,6 @@ class Itinerary:
 
     def distance_between(self, place1, place2):
         """Calculate the travel duration between two places using Google Maps API, with caching."""
-        # Create a tuple key for the cache
-        key = (place1.location, place2.location)
-        # Check if the distance is already cached
-        if key in self.cache:
-            return self.cache[key]
-
-        # Otherwise, calculate the distance
-
-
-        # Call the Google Maps API
-        distance = self.distance_matrix[place1.location][place2.location]
-        self.cache[key] = distance
         return self.distance_matrix[place1.location][place2.location]
 
 
@@ -74,9 +62,10 @@ class Itinerary:
                 else:
                     duration_value = math.inf
                 
-                # Set distance to infinity if two places have the same type
-                if i != j and self.places[i].type == self.places[j].type:
-                    duration_value = math.inf
+                # Set distance to a large penalty if two places have the same type to bias against adjacent placement
+                if i != j and self.places[i].type == self.places[j].type and self.places[i].type == PlaceType.FOOD:
+                    duration_value += 1000000  
+        
                 
                 distance_matrix[destinations[j]] = duration_value
                 j += 1
@@ -92,6 +81,10 @@ class Itinerary:
         if self.cost_of(self.places) < self.optimal:
             self.optimal = self.cost_of(self.places)
             self.final = list(self.places)
+            print(f"New optimal found: {self.optimal} seconds")
+            print("Final itinerary:")
+            for p in self.final:
+                print(f" - {p}")
         while self.restarts < 10:
             self.restarts += 1
             self.places = self.random_path(self.places)
@@ -103,19 +96,17 @@ def improve(places, solver):
     improvement = 0.0
     for i in range(len(places) - 1):
         for j in range(i + 1, len(places)):
-            # Try swapping - distance matrix already enforces type constraints
-            candidate = swap(list(places), i, j)
             current_distance = (
                 solver.distance_between(places[i], places[i + 1]) +
                 solver.distance_between(places[j], places[(j + 1) % len(places)])
             )
             new_distance = (
-                solver.distance_between(candidate[i], candidate[j]) +
-                solver.distance_between(candidate[i + 1], candidate[(j + 1) % len(candidate)])
+                solver.distance_between(places[i], places[j]) +
+                solver.distance_between(places[i + 1], places[(j + 1) % len(places)])
             )
             local_distance = current_distance - new_distance
             if local_distance > 0:
-                places[:] = candidate
+                places = swap(places, i, j)
                 improvement += local_distance
     return improvement
 

@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactDualRangeSlider from '../ReactDualRangeSlider';
 import '../steps/steps.css';
 
 const tourOptions = ["City Tour", "Museum Tour", "Nature Tour", "Historical Tour", "Physical Activity"];
 
-const PreferencesStep = ({ selectedTours, diningPreference, onToursChange, onDiningChange, onSubmit, onBack, loading }) => {
+const PreferencesStep = ({ selectedTours, diningPreference, mustVisitLocations, onToursChange, onDiningChange, onMustVisitChange, onSubmit, onBack, loading }) => {
+  const [newLocation, setNewLocation] = useState({ name: '', type: 'Tour', address: '' });
+
   const handleTourSelect = (tour) => {
     const newTours = selectedTours.includes(tour)
       ? selectedTours.filter(t => t !== tour)
@@ -63,6 +65,64 @@ const PreferencesStep = ({ selectedTours, diningPreference, onToursChange, onDin
           <span>Local Dining: {diningPreference.local}%</span>
           <span>High-End: {diningPreference.upscale}%</span>
         </div>
+      </div>
+
+      <div className="form-group">
+        <label>Must-Visit Locations (Optional)</label>
+        <p className="step-description">Add specific locations you want to visit with custom name and type.</p>
+        <div className="must-visit-input">
+          <input
+            type="text"
+            value={newLocation.name}
+            onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
+            placeholder="Name, e.g., White House"
+            className="form-input"
+          />
+          <select
+            value={newLocation.type}
+            onChange={(e) => setNewLocation({ ...newLocation, type: e.target.value })}
+            className="form-select"
+          >
+            <option value="Tour">Tour</option>
+            <option value="Food">Food</option>
+            <option value="Other">Other</option>
+          </select>
+          <input
+            type="text"
+            value={newLocation.address}
+            onChange={(e) => setNewLocation({ ...newLocation, address: e.target.value })}
+            placeholder="Address, e.g., 1600 Pennsylvania Avenue NW, Washington, DC"
+            className="form-input"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (newLocation.name.trim() && newLocation.address.trim()) {
+                onMustVisitChange([...mustVisitLocations, { ...newLocation }]);
+                setNewLocation({ name: '', type: 'Tour', address: '' });
+              }
+            }}
+            className="btn btn-secondary"
+          >
+            Add Location
+          </button>
+        </div>
+        {mustVisitLocations.length > 0 && (
+          <ul className="must-visit-list">
+            {mustVisitLocations.map((loc, idx) => (
+              <li key={idx} className="must-visit-item">
+                <strong>{loc.name}</strong> ({loc.type}): {loc.address}
+                <button
+                  type="button"
+                  onClick={() => onMustVisitChange(mustVisitLocations.filter((_, i) => i !== idx))}
+                  className="remove-btn"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="step-actions">

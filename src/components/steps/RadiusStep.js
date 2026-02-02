@@ -1,16 +1,30 @@
-import React, { useState, useMemo } from 'react';
-import { GoogleMap, Circle, useLoadScript } from '@react-google-maps/api';
+import React, { useState, useEffect, useMemo } from 'react';
+import { GoogleMap, Circle, Marker, useLoadScript } from '@react-google-maps/api';
 import '../steps/steps.css';
+import useGoogleMapsKey from '../useGoogleMapsKey';
 
-const GOOGLE_MAPS_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY';
+const RadiusStep = ({
+  location,
+  locationCoords,
+  radius,
+  onRadiusChange,
+  onLocationCoordsChange,
+  onNext,
+  onBack,
+}) => {
+  const { apiKey, loading: keyLoading, error: keyError } = useGoogleMapsKey();
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: apiKey,
+  });
 
-const RadiusStep = ({ location, locationCoords, radius, onRadiusChange, onNext, onBack }) => {
-  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: GOOGLE_MAPS_API_KEY });
+  // Single source of truth
+  const [center, setCenter] = useState(locationCoords);
 
-  // Convert miles to meters for the circle
-  const radiusInMeters = useMemo(() => {
-    return radius * 1609.34; // 1 mile = 1609.34 meters
-  }, [radius]);
+  useEffect(() => {
+    setCenter(locationCoords);
+  }, [locationCoords]);
+
+  const radiusInMeters = useMemo(() => radius * 1609.34, [radius]);
 
   const mapContainerStyle = {
     width: '100%',
@@ -20,25 +34,26 @@ const RadiusStep = ({ location, locationCoords, radius, onRadiusChange, onNext, 
 
   const mapOptions = {
     zoom: 11,
-    center: locationCoords || { lat: 40.7128, lng: -74.0060 },
-    mapTypeId: 'roadmap'
+    mapTypeId: 'roadmap',
+    disableDefaultUI: false,
   };
 
+  if (keyLoading) return <div>Loading API key...</div>;
+  if (keyError) return <div>Error loading API key</div>;
+
   if (loadError) return <div>Error loading maps</div>;
-  if (!isLoaded) return <div>Loading map...</div>;
+  if (!isLoaded || !center) return <div>Loading map...</div>;
 
   return (
     <div className="step-container">
       <h2>Step 2: Set Your Travel Radius</h2>
       <p className="step-description">
-        Choose how far you're willing to travel from your location (in miles).
-        The circle on the map shows your selected radius.
+        Drag the marker to adjust your location. The circle shows how far you're
+        willing to travel.
       </p>
-      
+
       <div className="form-group">
-        <label htmlFor="radius">
-          Radius: {radius} miles
-        </label>
+        <label htmlFor="radius">Radius: {radius} miles</label>
         <input
           id="radius"
           type="range"
@@ -58,23 +73,39 @@ const RadiusStep = ({ location, locationCoords, radius, onRadiusChange, onNext, 
       <div className="map-wrapper">
         <GoogleMap
           mapContainerStyle={mapContainerStyle}
-          center={locationCoords}
-          zoom={mapOptions.zoom}
+          center={center}
+          zoom={11}
           options={mapOptions}
         >
-          {locationCoords && (
-            <Circle
-              center={locationCoords}
-              radius={radiusInMeters}
-              options={{
-                fillColor: '#3498db',
-                fillOpacity: 0.2,
-                strokeColor: '#2980b9',
-                strokeOpacity: 0.8,
-                strokeWeight: 2,
-              }}
-            />
-          )}
+          {/* Visual radius */}
+          <Circle
+            center={center}
+            radius={radiusInMeters}
+            options={{
+              fillColor: '#3498db',
+              fillOpacity: 0.2,
+              strokeColor: '#2980b9',
+              strokeOpacity: 0.8,
+              strokeWeight: 2,
+              clickable: false,
+            }}
+          />
+
+          {/* Draggable center */}
+          <Marker
+            position={center}
+            draggable
+            title="Drag to adjust location"
+            onDragEnd={(e) => {
+              const newCenter = {
+                lat: e.latLng.lat(),
+                lng: e.latLng.lng(),
+              };
+
+              setCenter(newCenter);
+              onLocationCoordsChange?.(newCenter);
+            }}
+          />
         </GoogleMap>
       </div>
 
@@ -82,11 +113,7 @@ const RadiusStep = ({ location, locationCoords, radius, onRadiusChange, onNext, 
         <button type="button" onClick={onBack} className="btn btn-secondary">
           Back
         </button>
-        <button
-          type="button"
-          onClick={onNext}
-          className="btn btn-primary"
-        >
+        <button type="button" onClick={onNext} className="btn btn-primary">
           Next: Choose Hotel
         </button>
       </div>
@@ -95,4 +122,3 @@ const RadiusStep = ({ location, locationCoords, radius, onRadiusChange, onNext, 
 };
 
 export default RadiusStep;
-

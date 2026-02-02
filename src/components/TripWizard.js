@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import LocationStep from './steps/LocationStep';
 import RadiusStep from './steps/RadiusStep';
 import HotelStep from './steps/HotelStep';
-import TransportationStep from './steps/TransportationStep';
 import PreferencesStep from './steps/PreferencesStep';
 import ItineraryDisplay from './ItineraryDisplay';
 import './TripWizard.css';
@@ -25,6 +24,7 @@ const TripWizard = () => {
       local: 0,
       upscale: 0,
     },
+    mustVisitLocations: [],
   });
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -35,9 +35,14 @@ const TripWizard = () => {
   };
 
   const nextStep = () => {
-    if (currentStep < 5) {
+    if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
     }
+  };
+
+  const submitAndNext = async () => {
+    await handleSubmit();
+    setCurrentStep(5);
   };
 
   const prevStep = () => {
@@ -47,7 +52,7 @@ const TripWizard = () => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.location || !formData.selectedHotel) {
+    if (!formData.location || !formData.selectedHotel || !formData.checkInDate || !formData.checkOutDate) {
       setError('Please complete all required fields');
       return;
     }
@@ -75,6 +80,7 @@ const TripWizard = () => {
             formData.diningPreference.local,
             formData.diningPreference.upscale,
           ],
+          must_visit_locations: formData.mustVisitLocations,
         }),
       });
 
@@ -114,6 +120,10 @@ const TripWizard = () => {
             locationCoords={formData.locationCoords}
             radius={formData.radius}
             onRadiusChange={(radius) => updateFormData({ radius })}
+            onLocationCoordsChange={(coords) => {
+              console.log('TripWizard: Updating locationCoords to', coords);
+              updateFormData({ locationCoords: coords });
+            }}
             onNext={nextStep}
             onBack={prevStep}
           />
@@ -128,36 +138,39 @@ const TripWizard = () => {
             selectedHotel={formData.selectedHotel}
             checkInDate={formData.checkInDate}
             checkOutDate={formData.checkOutDate}
+            rentCar={formData.rentCar}
+            duration={formData.duration}
             onBudgetChange={(budget) => updateFormData({ budget })}
             onHotelSelect={(hotel) => updateFormData({ selectedHotel: hotel })}
             onCheckInChange={(date) => updateFormData({ checkInDate: date })}
             onCheckOutChange={(date) => updateFormData({ checkOutDate: date })}
-            onNext={nextStep}
-            onBack={prevStep}
-          />
-        );
-      case 4:
-        return (
-          <TransportationStep
-            rentCar={formData.rentCar}
-            duration={formData.duration}
             onRentCarChange={(rentCar) => updateFormData({ rentCar })}
             onDurationChange={(duration) => updateFormData({ duration })}
             onNext={nextStep}
             onBack={prevStep}
           />
         );
-      case 5:
+      case 4:
         return (
           <PreferencesStep
             selectedTours={formData.selectedTours}
             diningPreference={formData.diningPreference}
+            mustVisitLocations={formData.mustVisitLocations}
             onToursChange={(tours) => updateFormData({ selectedTours: tours })}
             onDiningChange={(pref) => updateFormData({ diningPreference: pref })}
-            onSubmit={handleSubmit}
+            onMustVisitChange={(locations) => updateFormData({ mustVisitLocations: locations })}
+            onSubmit={submitAndNext}
             onBack={prevStep}
             loading={loading}
           />
+        );
+      case 5:
+        return (
+          response && response.success ? (
+            <ItineraryDisplay data={response} location={formData.location} />
+          ) : (
+            <div>Loading itinerary...</div>
+          )
         );
       default:
         return null;
@@ -186,9 +199,7 @@ const TripWizard = () => {
         {renderStep()}
       </div>
 
-      {response && response.success && (
-        <ItineraryDisplay data={response} location={formData.location} />
-      )}
+
     </div>
   );
 };

@@ -1,8 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { GoogleMap, Marker, InfoWindow, Polyline, useLoadScript } from '@react-google-maps/api';
 import '../styles/ItineraryDisplay.css';
-
-const GOOGLE_MAPS_API_KEY = 'AIzaSyCaNKux4_R3TSDEUcF3KKd7UzE1WbiqnpY';
+import useGoogleMapsKey from './useGoogleMapsKey';
 
 const typeColors = {
   'landmark': '#FF6B6B',
@@ -17,10 +16,15 @@ const typeColors = {
 };
 
 const ItineraryDisplay = ({ data, location }) => {
+  const { apiKey, loading: keyLoading, error: keyError } = useGoogleMapsKey();
   const [selectedMarker, setSelectedMarker] = useState(null);
-  const [expandedDay, setExpandedDay] = useState(0);
+  const [expandedDay, setExpandedDay] = useState(-1);
+  const [zoom, setZoom] = useState(12);
 
-  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: GOOGLE_MAPS_API_KEY });
+  if (keyLoading) return <div>Loading API key...</div>;
+  if (keyError) return <div>Error loading API key</div>;
+
+  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: apiKey });
 
   // Default city coord fallback map
   const coordMap = useMemo(() => ({
@@ -52,12 +56,33 @@ const ItineraryDisplay = ({ data, location }) => {
     };
   }, [places]);
 
-  // Update center when average center is calculated from places
+  // Calculate center for the selected day
+  const dayCenter = useMemo(() => {
+    if (expandedDay === -1) return null;
+    const dayPlaces = places.filter(p => p.day === expandedDay + 1);
+    const validPlaces = dayPlaces.filter(p => p.lat != null && p.lng != null);
+    if (validPlaces.length === 0) return null;
+    const sumLat = validPlaces.reduce((sum, p) => sum + p.lat, 0);
+    const sumLng = validPlaces.reduce((sum, p) => sum + p.lng, 0);
+    return {
+      lat: sumLat / validPlaces.length,
+      lng: sumLng / validPlaces.length
+    };
+  }, [places, expandedDay]);
+
+  // Update center based on selected day or overall average
   useEffect(() => {
-    if (averageCenter) {
+    if (dayCenter) {
+      setCenter(dayCenter);
+    } else if (averageCenter) {
       setCenter(averageCenter);
     }
-  }, [averageCenter]);
+  }, [dayCenter, averageCenter]);
+
+  // Update zoom based on selected day
+  useEffect(() => {
+    setZoom(expandedDay === -1 ? 12 : 14);
+  }, [expandedDay]);
 
   // Build initial places whenever data changes
   useEffect(() => {
@@ -136,7 +161,6 @@ const ItineraryDisplay = ({ data, location }) => {
       }
       if (changed) setPlaces(updated);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, places.length, location]);
 
   // Create polylines for each day
@@ -164,7 +188,6 @@ const ItineraryDisplay = ({ data, location }) => {
   };
 
   const mapOptions = {
-    zoom: 12,
     center: center,
     mapTypeId: 'roadmap'
   };
@@ -186,17 +209,17 @@ const ItineraryDisplay = ({ data, location }) => {
         <GoogleMap
           mapContainerStyle={mapContainerStyle}
           center={center}
-          zoom={12}
+          zoom={zoom}
           options={mapOptions}
         >
           {/* Draw polylines for each day */}
-          {dayPolylines.map((polyline, idx) => 
+          {dayPolylines.filter(poly => expandedDay === -1 || poly.day === expandedDay + 1).map((polyline, idx) =>
             polyline && (
               <Polyline
-                key={`polyline-day-${idx}`}
+                key={`polyline-day-${polyline.day}`}
                 path={polyline.path}
                 options={{
-                  strokeColor: `hsl(${(idx * 60) % 360}, 70%, 50%)`,
+                  strokeColor: `hsl(${(polyline.day - 1) * 60 % 360}, 70%, 50%)`,
                   strokeOpacity: 0.7,
                   strokeWeight: 3
                 }}
@@ -204,12 +227,12 @@ const ItineraryDisplay = ({ data, location }) => {
             )
           )}
 
-          {/* Markers for all places */}
-          {places.map((place, idx) => (
+          {/* Markers for places */}
+          {places.filter(p => expandedDay === -1 || p.day === expandedDay + 1).map((place) => (
             <Marker
               key={`marker-${place.id}`}
               position={{ lat: place.lat ?? (center.lat + (Math.random() - 0.5) * 0.02), lng: place.lng ?? (center.lng + (Math.random() - 0.5) * 0.02) }}
-              onClick={() => setSelectedMarker(idx)}
+              onClick={() => setSelectedMarker(place.id)}
               title={place.name}
               icon={{
                 path: 'M0-48c-26.4 0-48 21.6-48 48s21.6 48 48 48 48-21.6 48-48-21.6-48-48-48z',
@@ -220,7 +243,7 @@ const ItineraryDisplay = ({ data, location }) => {
                 strokeWeight: 1
               }}
             >
-              {selectedMarker === idx && (
+              {selectedMarker === place.id && (
                 <InfoWindow
                   onCloseClick={() => setSelectedMarker(null)}
                 >
@@ -259,7 +282,7 @@ const ItineraryDisplay = ({ data, location }) => {
                     <div
                       key={`place-${dayIdx}-${placeIdx}`}
                       className="place-item"
-                      onMouseEnter={() => placeObj && setSelectedMarker(places.indexOf(placeObj))}
+                      onMouseEnter={() => placeObj && setSelectedMarker(placeObj.id)}
                       onMouseLeave={() => setSelectedMarker(null)}
                     >
                       <div className="place-number">{placeIdx + 1}</div>
