@@ -21,10 +21,7 @@ const ItineraryDisplay = ({ data, location }) => {
   const [expandedDay, setExpandedDay] = useState(-1);
   const [zoom, setZoom] = useState(12);
 
-  if (keyLoading) return <div>Loading API key...</div>;
-  if (keyError) return <div>Error loading API key</div>;
-
-  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: apiKey });
+  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: apiKey || '' });
 
   // Default city coord fallback map
   const coordMap = useMemo(() => ({
@@ -192,6 +189,8 @@ const ItineraryDisplay = ({ data, location }) => {
     mapTypeId: 'roadmap'
   };
 
+  if (keyLoading) return <div>Loading API key...</div>;
+  if (keyError) return <div>Error loading API key</div>;
   if (loadError) return <div>Error loading maps</div>;
   if (!isLoaded) return <div>Loading map...</div>;
 
