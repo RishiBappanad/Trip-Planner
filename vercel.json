@@ -1,16 +1,18 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/app.py", "use": "@vercel/python" },
-    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "build" } }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "api/app.py" },
-    { "src": "/(.*)", "dest": "/$1" }
-  ],
-  "build": {
-    "env": {
-      "CI": "false"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "app": {
+      "root": ".",
+      "buildCommand": "CI=false npm run build",
+      "outputDirectory": "build"
+    },
+    "api": {
+      "root": "api",
+      "entrypoint": "app:app"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "app" } }
+  ]
 }
