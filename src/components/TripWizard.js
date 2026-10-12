@@ -4,6 +4,7 @@ import RadiusStep from './steps/RadiusStep';
 import HotelStep from './steps/HotelStep';
 import PreferencesStep from './steps/PreferencesStep';
 import ItineraryDisplay from './ItineraryDisplay';
+import { API_BASE } from '../config';
 import './TripWizard.css';
 
 const TripWizard = () => {
@@ -61,7 +62,7 @@ const TripWizard = () => {
     setError(null);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/submit', {
+      const response = await fetch(`${API_BASE}/api/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

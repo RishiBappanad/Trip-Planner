@@ -49,40 +49,42 @@ def search_hotels():
         max_price = budget_per_night
         print(f"Budget per night: ${budget_per_night}, Nights: {num_nights}, Max total price: ${max_price}")
 
-        # Use Amadeus API if we have coordinates and dates
+        # Use Hotelbeds API if we have coordinates and dates
         if location_coords and check_in_date and check_out_date:
             try:
                 lat = location_coords.get('lat')
                 lng = location_coords.get('lng')
 
-                # Step 1: Get hotels by geocode
-                hotels = search.get_hotels(lat, lng, radius)
-
-                # Step 2: Get priced hotels (batches of 5)
-                priced_hotel_list = search.priced_hotels(
-                    max_price=max_price * num_nights,
+                priced_hotel_list = search.search_hotels_by_geolocation(
+                    lat=lat,
+                    lon=lng,
+                    radius_miles=radius,
                     check_in_date=check_in_date,
                     check_out_date=check_out_date,
-                    hotels=hotels,
+                    max_price=max_price * num_nights,
                     num_nights=num_nights
                 )
 
                 return jsonify({'hotels': priced_hotel_list})
-            except Exception as amadeus_err:
-                print(f"Amadeus API error: {amadeus_err}")
-                # Fallback to Foursquare if Amadeus fails
+            except Exception as hotelbeds_err:
+                print(f"Hotelbeds API error: {hotelbeds_err}")
+                # Fallback to Foursquare if Hotelbeds fails
                 pass
 
         # Fallback to Foursquare search
         # Determine query based on hotel_name
         query = data.get('hotel') if data.get('hotel') else "hotel"
 
+        # No max_price here: Foursquare's price param is a relative 1-4 "$"
+        # venue tier, not a nightly rate, and combined with the Hotel category
+        # filter it zeroes out real hotels that aren't tagged the cheapest
+        # tier. The displayed price below is already just a flat estimate.
         hotels = search.search_places(
             location=location,
             query=query,
-            max_price=max_price if not data.get('hotel_name') else None,  # Skip price filter for specific hotel
             radius=radius,
-            location_coords=location_coords
+            location_coords=location_coords,
+            category_ids=search.FOURSQUARE_HOTEL_CATEGORY_ID
         )
 
         # Format hotels for frontend

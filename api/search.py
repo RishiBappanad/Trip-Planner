@@ -1,4 +1,6 @@
+import hashlib
 import math
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS  # Import CORS
 import os
@@ -8,254 +10,131 @@ from datetime import datetime
 from place import Place
 from place import PlaceType
 from config import FOURSQUARE_API_KEY
-import concurrent.futures
 
-# Amadeus configuration
-from config import AMADEUS_CLIENT_ID, AMADEUS_CLIENT_SECRET
-AMADEUS_BASE_URL = "https://test.api.amadeus.com"
+# Hotelbeds configuration (APItude test/sandbox environment)
+from config import HOTELBEDS_API_KEY, HOTELBEDS_API_SECRET
+HOTELBEDS_BASE_URL = "https://api.test.hotelbeds.com"
 
-def get_amadeus_access_token():
+MILES_TO_KM = 1.60934
+
+
+def _hotelbeds_headers():
     """
-    Retrieve an OAuth2 access token from Amadeus.
-    Expects AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET to be set in the environment.
+    Build the Api-key/X-Signature headers Hotelbeds requires on every request.
+    Signature = sha256(api_key + secret + current unix timestamp).
     """
-    if not AMADEUS_CLIENT_ID or not AMADEUS_CLIENT_SECRET:
-        raise RuntimeError("Amadeus credentials not configured. Set AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET.")
+    if not HOTELBEDS_API_KEY or not HOTELBEDS_API_SECRET:
+        raise RuntimeError("Hotelbeds credentials not configured. Set HOTELBEDS_API_KEY and HOTELBEDS_API_SECRET.")
 
-    token_url = f"{AMADEUS_BASE_URL}/v1/security/oauth2/token"
-    data = {
-        "grant_type": "client_credentials",
-        "client_id": AMADEUS_CLIENT_ID,
-        "client_secret": AMADEUS_CLIENT_SECRET,
+    timestamp = str(int(time.time()))
+    signature = hashlib.sha256(f"{HOTELBEDS_API_KEY}{HOTELBEDS_API_SECRET}{timestamp}".encode("utf-8")).hexdigest()
+    return {
+        "Api-key": HOTELBEDS_API_KEY,
+        "X-Signature": signature,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
     }
-    resp = requests.post(token_url, data=data)
-    if resp.status_code != 200:
-        raise RuntimeError(f"Failed to obtain Amadeus token: {resp.status_code} - {resp.text}")
-    payload = resp.json()
-    return payload.get("access_token")
 
 
-def get_hotels(lat, lon, radius_miles):
+def search_hotels_by_geolocation(lat, lon, radius_miles, check_in_date, check_out_date, max_price, num_nights, adults=1, currency="EUR"):
     """
-    Step 1: Given a center point and radius, return a list of hotels from Amadeus.
+    Search bookable hotel availability around a point using Hotelbeds' Booking API
+    geolocation filter. One call covers what Amadeus needed two calls for (hotel
+    lookup + priced offers), since Hotelbeds returns coordinates and rates together.
 
     Args:
-        lat (float): latitude of center
-        lon (float): longitude of center
-        radius_miles (float): search radius in miles
+        lat, lon (float): center point
+        radius_miles (float): search radius in miles (converted to km for Hotelbeds)
+        check_in_date, check_out_date (str): YYYY-MM-DD
+        max_price (float): maximum total stay price to include
+        num_nights (int): used to convert the stay total into a per-night price
+        adults (int): occupants per room
+        currency (str): Hotelbeds sandbox data is typically EUR regardless of this hint
 
     Returns:
-        list[tuple]: each tuple is (hotel_dict, location_tuple) where hotel_dict has {hotelId, name},
-                     and location_tuple is (lat, lon, address)
+        list[dict]: {name, lat, lon, address, price} per hotel, cheapest-rate <= max_price
     """
-    access_token = get_amadeus_access_token()
-
-    url = f"{AMADEUS_BASE_URL}/v1/reference-data/locations/hotels/by-geocode"
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "radius": radius_miles,
-        "radiusUnit": "MILE",
-    }
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json",
+    url = f"{HOTELBEDS_BASE_URL}/hotel-api/1.0/hotels"
+    body = {
+        "stay": {"checkIn": check_in_date, "checkOut": check_out_date},
+        "occupancies": [{"rooms": 1, "adults": adults, "children": 0}],
+        "geolocation": {
+            "latitude": lat,
+            "longitude": lon,
+            "radius": round(radius_miles * MILES_TO_KM),
+            "unit": "km",
+        },
     }
 
-    resp = requests.get(url, headers=headers, params=params)
-    print(f"Amadeus get_hotels request: {resp.url}")
+    resp = requests.post(url, headers=_hotelbeds_headers(), json=body)
+    print(f"Hotelbeds availability request: {resp.url} body={body}")
     if resp.status_code != 200:
-        print(f"Amadeus get_hotels error: {resp.status_code} - {resp.text}")
+        print(f"Hotelbeds availability error: {resp.status_code} - {resp.text}")
         return []
 
-    data = resp.json().get("data", [])
-    hotels = []
-    for item in data:
-        try:
-            hotel_id = item.get("hotelId")
-            name = item.get("name") or item.get("hotel", {}).get("name")
-            geo = item.get("geoCode", {})
-            print(geo['latitude'])
-            address_obj = item.get("address", {})
-            print(address_obj['lines'][0] if 'lines' in address_obj and address_obj['lines'] else None)
-            address = ", ".join(
-                filter(
-                    None,
-                    [
-                        address_obj['lines'][0] if 'lines' in address_obj and address_obj['lines'] else None,
-                        address_obj['cityName'] if 'cityName' in address_obj else None,
-                        address_obj['postalCode'] if 'postalCode' in address_obj else None,
-                        address_obj['countryCode'] if 'countryCode' in address_obj else None,
-                    ],
-                )
-            )
-
-            hotel_dict = {
-                "hotelId": hotel_id,
-                "name": name or "Unknown",
-            }
-            location_tuple = (geo['latitude'], geo['longitude'], address or "Unknown")
-            hotels.append((hotel_dict, location_tuple))
-        except Exception as e:
-            print(f"Error parsing Amadeus hotel item: {e}")
-    return hotels
-
-
-def _chunk_hotels(hotels, batch_size=5):
-    """
-    Helper to split a list of hotels into batches of valid size for the offers API.
-    """
-    for i in range(0, len(hotels), batch_size):
-        yield hotels[i : i + batch_size]
-
-
-def _process_batch(access_token, batch, base_params, headers, hotels_dict, max_price):
-    """
-    Process a batch of hotels to get priced offers.
-    """
-    url = f"{AMADEUS_BASE_URL}/v3/shopping/hotel-offers"
-    hotel_ids = [h[0].get("hotelId") for h in batch if h[0].get("hotelId")]
-    if not hotel_ids:
-        return []
-
-    params = base_params.copy()
-    params["hotelIds"] = ",".join(hotel_ids)
-
-    resp = requests.get(url, headers=headers, params=params)
-    print(f"Amadeus priced_hotels batch request: {resp.url}")
-    if resp.status_code != 200:
-        print(f"Amadeus priced_hotels batch error: {resp.status_code} - {resp.text}")
-        return []
-
-    data = resp.json().get("data", [])
-    batch_result = []
-    for item in data:
-        try:
-            hotel_info = item.get("hotel", {})
-            hotel_id = hotel_info.get("hotelId")
-            offers = item.get("offers", [])
-            if not hotel_id or not offers:
-                continue
-
-            # Find the location_tuple from input hotels
-            location_tuple = hotels_dict.get(hotel_id)
-            if not location_tuple:
-                continue
-
-            lat, lon, addr = location_tuple
-            hotel_name = hotels_dict.get(hotel_id + "_name", "Unknown")
-
-            # Find any offer for hotel within the price range
-            qualifying_price = None
-            for offer in offers:
-                price_info = offer.get("price", {})
-                total_str = price_info.get("total")
-                try:
-                    total_val = float(total_str)
-                except (TypeError, ValueError):
-                    continue
-                if total_val <= max_price: 
-                    qualifying_price = total_val
-                    break
-            if qualifying_price is None:
-                continue
-
-            hotel_entry = {
-                "hotelId": hotel_id,
-                "name": hotel_info.get("name") or hotel_name,
-                "lat": lat,
-                "lon": lon,
-                "address": addr,
-                "price": qualifying_price / (base_params.get("num_nights", 1)),
-            }
-
-            batch_result.append(hotel_entry)
-            print(f"Added hotel: {hotel_entry}")
-        except Exception as e:
-            print(f"Error parsing Amadeus offer item: {e}")
-    return batch_result
-
-
-def priced_hotels(max_price, check_in_date, check_out_date, hotels, num_nights, adults=1, currency="USD"):
-    """
-    Step 2: Given a price ceiling, dates, and a hotel list from get_hotels,
-    return a list of hotels that have at least one offer within the price range.
-
-    Args:
-        max_price (float): maximum total price (per stay) to include
-        check_in_date (str): YYYY-MM-DD
-        check_out_date (str): YYYY-MM-DD
-        hotels (list[tuple]): list from get_hotels(), each (hotel_dict, location_tuple)
-        adults (int): number of adults
-        currency (str): currency code, e.g. 'USD'
-
-    Returns:
-        list[dict]: one entry per hotel that has any matching offer,
-                    each dict includes location info from get_hotels and 'price' field.
-    """
-    if not hotels:
-        return []
-
-    access_token = get_amadeus_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json",
-    }
-
-    # Create a dict for quick lookup of location and name
-    hotels_dict = {}
-    for h in hotels:
-        h_dict, loc = h
-        hotel_id = h_dict.get("hotelId")
-        if hotel_id:
-            hotels_dict[hotel_id] = loc
-            hotels_dict[hotel_id + "_name"] = h_dict.get("name", "Unknown")
-
-    base_params = {
-        "checkInDate": check_in_date,
-        "checkOutDate": check_out_date,
-        "adults": adults,
-        "currency": currency,
-        "priceRange": f"0-{max_price}",
-        "num_nights": num_nights,
-    }
-
+    hotels_data = resp.json().get("hotels", {}).get("hotels", [])
     result = []
-    seen_ids = set()
+    for item in hotels_data:
+        try:
+            min_rate = item.get("minRate")
+            if min_rate is None:
+                continue
+            total_price = float(min_rate)
+            if total_price > max_price:
+                continue
 
-    # Process hotels in parallel batches
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = []
-        for batch in _chunk_hotels(hotels, batch_size=5):
-            futures.append(executor.submit(_process_batch, access_token, batch, base_params, headers, hotels_dict, max_price))
+            address = ", ".join(filter(None, [item.get("zoneName"), item.get("destinationName")])) or "Unknown"
 
-        for future in concurrent.futures.as_completed(futures):
-            batch_result = future.result()
-            for hotel_entry in batch_result:
-                hotel_id = hotel_entry["hotelId"]
-                if hotel_id not in seen_ids:
-                    result.append(hotel_entry)
-                    seen_ids.add(hotel_id)
-                    if len(result) >= 20:
-                        return result[:20]
+            # Hotelbeds returns latitude/longitude as strings; the frontend
+            # feeds these straight into Google Maps' LatLngBounds, which
+            # requires actual numbers and throws otherwise.
+            lat = item.get("latitude")
+            lon = item.get("longitude")
+
+            result.append({
+                "hotelId": item.get("code"),
+                "name": item.get("name") or "Unknown",
+                "lat": float(lat) if lat is not None else None,
+                "lon": float(lon) if lon is not None else None,
+                "address": address,
+                "price": total_price / max(num_nights, 1),
+            })
+            if len(result) >= 20:
+                break
+        except Exception as e:
+            print(f"Error parsing Hotelbeds hotel item: {e}")
 
     print(f"Total priced hotels: {len(result)}")
     return result
 
 
 
-def search_places(location, query, max_price=None, radius=None, location_coords=None):
+FOURSQUARE_HOTEL_CATEGORY_ID = "4bf58dd8d48988d1fa931735"
+
+
+def search_places(location, query, max_price=None, radius=None, location_coords=None, category_ids=None):
     """Search places using Foursquare Places API and return list of Place objects with address and coords."""
     if location is None:
         return []
     location_str = str(location_coords['lat']) + "," + str(location_coords['lng']) if location_coords else location
-    
+
+    # fsq_category_ids matches ANY of a place's categories, not just its
+    # primary one, so a hotel's in-house cafe/restaurant/breakfast room also
+    # matches (it's tagged with both its own category and "Hotel"). Those
+    # outrank the actual hotels under sort=POPULARITY within a small result
+    # window, so pull a larger page and filter to primary-category matches
+    # below rather than trusting the top 20 as-is.
+    limit = 50 if category_ids else 20
+
     # Build URL with parameters
     if location_coords and radius:
-        url = f"https://places-api.foursquare.com/places/search?query={urllib.parse.quote(query)}&ll={urllib.parse.quote(location_str)}&radius={urllib.parse.quote(str(int(radius)))}&sort=POPULARITY&limit=20"
+        url = f"https://places-api.foursquare.com/places/search?query={urllib.parse.quote(query)}&ll={urllib.parse.quote(location_str)}&radius={urllib.parse.quote(str(int(radius)))}&sort=POPULARITY&limit={limit}"
     else:
-        url = f"https://places-api.foursquare.com/places/search?query={urllib.parse.quote(query)}&near={urllib.parse.quote(location_str)}&sort=POPULARITY&limit=20"
-    
+        url = f"https://places-api.foursquare.com/places/search?query={urllib.parse.quote(query)}&near={urllib.parse.quote(location_str)}&sort=POPULARITY&limit={limit}"
+
+    if category_ids:
+        url += f"&fsq_category_ids={urllib.parse.quote(category_ids)}"
+
     # Add max_price if provided (for hotels)
     if max_price is not None:
         if max_price < 150:
@@ -278,19 +157,27 @@ def search_places(location, query, max_price=None, radius=None, location_coords=
         print(f"Response status: {response.status_code}")
         if response.status_code == 200:
             items = response.json().get('results', [])
+            allowed_category_ids = set(category_ids.split(',')) if category_ids else None
             places = []
             for item in items:
                 try:
+                    if allowed_category_ids:
+                        item_categories = item.get('categories', [])
+                        primary_category_id = item_categories[0].get('fsq_category_id') if item_categories else None
+                        if primary_category_id not in allowed_category_ids:
+                            continue  # skip venues only tagged Hotel as a secondary category (e.g. a hotel's cafe)
+
                     place_name = item.get('name', 'Unknown')
                     loc = item.get('location', {})
                     # prefer formatted_address, fall back to components
                     place_addr = loc.get('formatted_address') or \
                         ", ".join(filter(None, [loc.get('address'), loc.get('locality'), loc.get('region'), loc.get('country')])) or 'Unknown'
 
-                    geocodes = item.get('geocodes', {})
-                    main = geocodes.get('main', {})
-                    lat = main.get('latitude') if main else None
-                    lon = main.get('longitude') if main else None
+                    # This API version (2025-06-17) returns coordinates as
+                    # top-level latitude/longitude fields, not nested under
+                    # geocodes.main like the older Foursquare API did.
+                    lat = item.get('latitude')
+                    lon = item.get('longitude')
 
                     if location_coords and radius and lat and lon:
                         # Calculate distance in miles using Haversine formula

@@ -6,7 +6,19 @@ import '../steps/steps.css';
 import useGoogleMapsKey from '../useGoogleMapsKey';
 import { API_BASE } from '../../config';
 
-const HotelStep = ({
+const HotelStep = (props) => {
+  const { apiKey, loading: keyLoading, error: keyError } = useGoogleMapsKey();
+
+  if (keyLoading) return <div>Loading API key...</div>;
+  if (keyError) return <div>Error loading API key</div>;
+
+  // Rendered only once apiKey has its real, final value - see RadiusStep.js
+  // for why useLoadScript must never see apiKey change after its first call.
+  return <HotelStepMap {...props} apiKey={apiKey} />;
+};
+
+const HotelStepMap = ({
+  apiKey,
   location,
   locationCoords,
   radius,
@@ -25,7 +37,6 @@ const HotelStep = ({
   onNext,
   onBack,
 }) => {
-  const { apiKey, loading: keyLoading, error: keyError } = useGoogleMapsKey();
   const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: apiKey });
   const [hotels, setHotels] = useState([]);
   const [loadingHotels, setLoadingHotels] = useState(false);
@@ -115,9 +126,6 @@ const HotelStep = ({
     center: locationCoords || { lat: 40.7128, lng: -74.0060 },
     mapTypeId: 'roadmap'
   };
-
-  if (keyLoading) return <div>Loading API key...</div>;
-  if (keyError) return <div>Error loading API key</div>;
 
   if (loadError) return <div>Error loading maps</div>;
   if (!isLoaded) return <div>Loading map...</div>;

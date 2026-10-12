@@ -3,7 +3,21 @@ import { GoogleMap, Circle, Marker, useLoadScript } from '@react-google-maps/api
 import '../steps/steps.css';
 import useGoogleMapsKey from '../useGoogleMapsKey';
 
-const RadiusStep = ({
+const RadiusStep = (props) => {
+  const { apiKey, loading: keyLoading, error: keyError } = useGoogleMapsKey();
+
+  if (keyLoading) return <div>Loading API key...</div>;
+  if (keyError) return <div>Error loading API key</div>;
+
+  // Rendered only once apiKey has its real, final value, so useLoadScript
+  // below is never called with a placeholder that changes afterwards
+  // (that transition is what caused the Maps script to load twice and
+  // corrupt itself - see RadiusStepMap).
+  return <RadiusStepMap {...props} apiKey={apiKey} />;
+};
+
+const RadiusStepMap = ({
+  apiKey,
   location,
   locationCoords,
   radius,
@@ -12,7 +26,6 @@ const RadiusStep = ({
   onNext,
   onBack,
 }) => {
-  const { apiKey, loading: keyLoading, error: keyError } = useGoogleMapsKey();
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: apiKey,
   });
@@ -37,9 +50,6 @@ const RadiusStep = ({
     mapTypeId: 'roadmap',
     disableDefaultUI: false,
   };
-
-  if (keyLoading) return <div>Loading API key...</div>;
-  if (keyError) return <div>Error loading API key</div>;
 
   if (loadError) return <div>Error loading maps</div>;
   if (!isLoaded || !center) return <div>Loading map...</div>;

@@ -17,11 +17,21 @@ const typeColors = {
 
 const ItineraryDisplay = ({ data, location }) => {
   const { apiKey, loading: keyLoading, error: keyError } = useGoogleMapsKey();
+
+  if (keyLoading) return <div>Loading API key...</div>;
+  if (keyError) return <div>Error loading API key</div>;
+
+  // Rendered only once apiKey has its real, final value - see RadiusStep.js
+  // for why useLoadScript must never see apiKey change after its first call.
+  return <ItineraryDisplayMap data={data} location={location} apiKey={apiKey} />;
+};
+
+const ItineraryDisplayMap = ({ data, location, apiKey }) => {
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [expandedDay, setExpandedDay] = useState(-1);
   const [zoom, setZoom] = useState(12);
 
-  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: apiKey || '' });
+  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: apiKey });
 
   // Default city coord fallback map
   const coordMap = useMemo(() => ({
@@ -189,8 +199,6 @@ const ItineraryDisplay = ({ data, location }) => {
     mapTypeId: 'roadmap'
   };
 
-  if (keyLoading) return <div>Loading API key...</div>;
-  if (keyError) return <div>Error loading API key</div>;
   if (loadError) return <div>Error loading maps</div>;
   if (!isLoaded) return <div>Loading map...</div>;
 
